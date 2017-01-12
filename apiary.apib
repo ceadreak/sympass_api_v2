@@ -1,0 +1,2200 @@
+FORMAT: 1A
+HOST: http://polls.apiblueprint.org/
+
+# Sympass API V2
+Sympass API is a RESTful API.
+For each API request except the request token API, there are 2 mandatory http header parameters : 
+- Accept-Language > Is an ISO(2) language code (fr | en | de | ...)
+- Authorization > Bearer > Is the member's unique token
+
+# Description Of Usual Server Responses  
+- 200 `OK` - the request was successful (some API calls may return 201 instead). 
+- 201 `Created` - the request was successful and a resource was created.  
+- 204 `No Content` - the request was successful but there is no representation to return (i.e. the response is empty).  
+- 400 `Bad Request` - the request could not be understood or was missing required parameters.  
+- 401 `Unauthorized` - authentication failed or user doesn't have permissions for requested operation.  
+- 403 `Forbidden` - access denied.  
+- 404 `Not Found` - resource was not found.  
+- 405 `Method Not Allowed` - requested method is not supported for resource.  
+
+# Response codes (status key)
+- 0 `EVERYTHING_IS_OK`
+- 200001 `CONTENT_NOT_FOUND`
+- 200002 `PAGE_NOT_FOUND`
+- 200003 `FORBIDDEN`
+- 200004 `UNAUTHORIZED`
+- 200005 `LOGIN_ALREADY_USED`
+- 200006 `INVALID_LOGIN`
+- 210001 `METHOD_NOT_ALLOWED`
+- 220001 `UNEXPECTED_PARAMETER`
+- 230001 `BAD_REQUEST`
+- 240001 `UNEXPECTED_VALUE`
+
+# Locales
+Some fields in API service requests can be translated. Available languages in request header are `fr`, `en`, `de`.
+Fallback locale is `fr`.
+
+# oAuth2
+Sympass API's are protected by oAuth2 protocol, each request needs a valid token.
+oAuth2 implementation is based to the PHP lib https://bshaffer.github.io
+
+Used stretegies are : 
+- Client credentials
+- Password
+- Refresh token
+
+## Client credentials and Password
+To request a token, you must ask a `client ID` and a `client Secret`.
+It's recommended to use `Basic` authentication through the request authorization header :
+
+`Authorization: Basic dGVzdF9jbGllbnQ6dGVzdF9wYXNzd29yZA==` where `dGVzdF9jbGllbnQ6dGVzdF9wYXNzd29yZA==` is a base64 encoded string containing `test_client:test_password`
+
+Then you can send user credentials through the body using `json` format :
+
+    {
+        "grant_type" : "password",
+        "username" : "6199318",
+        "password" : "6199318"
+    }
+    
+Or `url-encoded` format :
+
+`grant_type=password&username=6199318&password=6199318`
+
+But for now, it also works if you provide credentials in body using `json` or `url-encoded` formats :
+
+    {
+        "client_id" : "test_client",
+        "client_password" : "test_password",
+        "grant_type" : "password",
+        "username" : "6199318",
+        "password" : "6199318"
+    }
+    
+- Expiration date for a token is +1 day
+    
+## Client credentials and Refresh token
+When a token is expired, a refresh token request can be handled with the client credentials :
+
+    {
+        "grant_type": "refresh_token",
+        "refresh_token": "ee32f8d38c185e83a2f7ebdc9577d0e48bc5b26c"
+    }
+    
+- Expiration date for a refresh token is one month
+
+
+## Request token [/oauth/token]
+First request token using `client_credentials` and `password` strategies.
+oAuth2 configuration always issue new refresh token when a token is expired using `client_credentials` and `refresh_token`.
+
+### Request token [POST]
+
++ Request (application/json)
+
+    + Body
+    
+            {
+                "client_id" : "test_client",
+                "client_password" : "test_password",
+                "grant_type": "password",
+                "username": "6199318",
+                "password": "6199318"
+            }
+        
++ Response 200 (application/json) 
+
+        {
+            "access_token": "38f5ececd5bc090eaa2308145f9912c2b6acc5ee",
+            "expires_in": 3600,
+            "token_type": "Bearer",
+            "scope": null,
+            "refresh_token": "ee32f8d38c185e83a2f7ebdc9577d0e48bc5b26c"
+        }
+
+
++ Request (application/json)
+
+    + Body
+    
+            {
+                "grant_type": "refresh_token",
+                "refresh_token": "ee32f8d38c185e83a2f7ebdc9577d0e48bc5b26c",
+            }
+        
++ Response 200 (application/json) 
+
+        {
+            "access_token": "ad4dd40224978bf64f722993cc1d0f6328c987c5",
+            "expires_in": 3600,
+            "token_type": "Bearer",
+            "scope": null,
+            "refresh_token": "06ebd1721a6f983ed48497f48a4f838a6321d471"
+        }
+
+
+
+## Member [/api/member/{member_id}]
+Member is a company employee. Company is the client.
+A member is always linked to a client address.
+Each member has a Sympass ID Card.
+
+**Member attributes:**  
+
+<table>  
+    <thead><th>Name</th><th>Type</th><th>Nullable</th><th>Description</th></thead>
+    <tbody>
+        <tr><td>id</td><td>Number</td><td>False</td><td>Member unique identifier</td></tr>
+        <tr><td>sympass_id</td><td>String</td><td>False</td><td>The Sympass card ID</td></tr>      
+        <tr><td>login</td><td>String</td><td>False</td><td>Unique member login</td></tr>
+        <tr><td>password</td><td>String</td><td>False</td><td>Member md5 password</td></tr>      
+        <tr><td>role</td><td>String</td><td>False</td><td>Member's role for ACL * Check the member roles description bellow</td></tr>
+        <tr><td>gender</td><td>String</td><td>False</td><td>male or female</td></tr>
+        <tr><td>first_name</td><td>String</td><td>False</td><td>Member's first name (John)</td></tr>
+        <tr><td>last_name</td><td>String</td><td>False</td><td>Member's last name (Doe)</td></tr>
+        <tr><td>email</td><td>String</td><td>True</td><td>Member's professionnal email address</td></tr>
+        <tr><td>email_personal</td><td>String</td><td>True</td><td>Member's personnal email address. Priority comparing to the email field</td></tr>
+        <tr><td>language</td><td>String</td><td>False</td><td>Member's language iso(2) code (fr|en|de|...) </td></tr>
+        <tr><td>phone</td><td>String</td><td>True</td><td>Member's phone number</td></tr>
+        <tr><td>mobile</td><td>String</td><td>True</td><td>Member's mobile number</td></tr>
+        <tr><td>function</td><td>String</td><td>True</td><td>Member's role in his company</td></tr>
+        <tr><td>date_of_birth</td><td>Timestamp without Timezone</td><td>False</td><td>Member's birthdate</td></tr>      
+        <tr><td>last_access_date</td><td>Timestamp without Timezone</td><td>False</td><td>Last Member access date</td></tr>      
+        <tr><td>status</td><td>Number</td><td>False</td><td>* Check the members statuses description bellow</td></tr>      
+        <tr><td>options</td><td>Number</td><td>False</td><td>* Check the members options description bellow</td></tr>      
+        <tr><td>hobbies</td><td>Number</td><td>True</td><td>* Check the members hobbies description bellow</td></tr>      
+        <tr><td>department</td><td>String</td><td>False</td><td>Where the member works in his company</td></tr>      
+        <tr><td>reference</td><td>String</td><td>False</td><td>Company reference</td></tr>      
+        <tr><td>valid_from</td><td>Timestamp without Timezone</td><td>False</td><td>Valid from this date</td></tr>      
+        <tr><td>valid_to</td><td>Timestamp without Timezone</td><td>True</td><td>Valid to this date. Null if not defined</td></tr>
+        <tr><td>activated_on</td><td>Timestamp without Timezone</td><td>True</td><td>First activation datetime</td></tr>
+        <tr><td>deactivated_on</td><td>Timestamp without Timezone</td><td>True</td><td>Deactivation datetime</td></tr>      
+        <tr><td>created_at</td><td>Timestamp without Timezone</td><td>False</td><td>Creation datetime</td></tr>      
+        <tr><td>updated_at</td><td>Timestamp without Timezone</td><td>False</td><td>Update datetime</td></tr>      
+        <tr><td>address</td><td>JSON</td><td>False</td><td>Address which member is attached to</td></tr>      
+        <tr><td>in_shop_orders</td><td>JSON</td><td>True</td><td>Member's saved amount at partner's shop</td></tr>      
+        <tr><td>total_amount_spent</td><td>Float</td><td>False</td><td>Sum of member's total amount spent for ticketing service and at partner's shop</td></tr>      
+        <tr><td>total_amount_saved</td><td>Float</td><td>False</td><td>Sum of member's total amount saved for ticketing service and at partner's shop</td></tr>      
+        <tr><td>client_name</td><td>String</td><td>False</td><td>Client name which member is attached to</td></tr>      
+        <tr><td>client_id</td><td>Number</td><td>False</td><td>Client ID which member is attached to</td></tr>      
+        <tr><td>client_slug</td><td>String</td><td>Flase</td><td>Unique identifier based on client name</td></tr>      
+        <tr><td>client_logo</td><td>String</td><td>False</td><td>Logo access URL</td></tr>      
+        <tr><td>ticketing_service_id</td><td>Number</td><td>False</td><td>Main ticketing service ID</td></tr>      
+        <tr><td>conciergerie_alert</td><td>Number</td><td>False</td><td>Number of "pending" services (Order lines are in "BROUGHT BACK" status)</td></tr>      
+    </tbody>
+</table>     
+
+**Member roles:**  
+
+<table>  
+    <thead><th>Value</th><th>Permissions short description</th></thead>
+    <tbody>
+        <tr><td>member</td><td>Member can operate for himself, for his own account</td></tr>      
+        <tr><td>corporate_local</td><td>Member can operate for his company account</td></tr>      
+        <tr><td>corporate_global</td><td>Member can operate for a group of companies accounts</td></tr>      
+    </tbody>
+</table>
+
+**Member statuses (not combinable):**  
+
+<table>  
+    <thead><th>Name</th><th>Binary value</th><th>Description</th></thead>
+    <tbody>
+        <tr><td>NONE</td><td>0</td><td>None</td></tr>      
+        <tr><td>SUSPENDED</td><td>1</td><td>Member is suspended</td></tr>      
+    </tbody>
+</table>
+
+**Member options (combinable):**  
+
+<table>  
+    <thead><th>Name</th><th>Binary value</th><th>Description</th></thead>
+    <tbody>
+        <tr><td>CAN_USE_TICKETING_SERVICES</td><td>1</td><td>Does member can access to platform ticketing services ?</td></tr>      
+        <tr><td>CAN_USE_CONCIERGERIE_SERVICES</td><td>2</td><td>Does member can access to platform concierge services ?</td></tr>      
+        <tr><td>SUBSCRIBED_TO_NEWSLETTER</td><td>4</td><td>Member has subscribed to the newsletter</td></tr>      
+        <tr><td>TOS_ACCEPTED</td><td>16</td><td>Member has accepted terms of use</td></tr>      
+    </tbody>
+</table>
+
+**Member hobbies (combinable):**  
+
+<table>  
+    <thead><th>Name</th><th>Binary value</th><th>Description</th></thead>
+    <tbody>
+        <tr><td>NONE</td><td>0</td><td>Member is focused by nothing</td></tr>      
+        <tr><td>HOBBY_SPORT</td><td>1</td><td>Member is focused by sport</td></tr>      
+        <tr><td>HOBBY_TRAVELING</td><td>2</td><td>Member is focused by traveling</td></tr>      
+        <tr><td>HOBBY_GASTRONOMY</td><td>4</td><td>Member is focused by gastronomy</td></tr>      
+        <tr><td>HOBBY_OUTGOING</td><td>8</td><td>Member is focused by outgoing</td></tr>      
+        <tr><td>HOBBY_KNOWLEDGE</td><td>16</td><td>Member is focused by knowledge</td></tr>      
+        <tr><td>HOBBY_MODE</td><td>32</td><td>Member is focused by mode</td></tr>      
+        <tr><td>HOBBY_HEALTH</td><td>64</td><td>Member is focused by health</td></tr>      
+        <tr><td>HOBBY_SERVICES</td><td>128</td><td>Member is focused by services</td></tr>      
+    </tbody>
+</table>
+
+
+*Note : A member can only access to the platform if :*
+- status is not suspended
+- activated_on value is lower than now
+- deactivated_on is value is not set or is greather than now
+- valid_from value is less than now
+- valid_to value is greather than now
+- <b>The "last_update" response value is the modified_on member date converted to a Unix Timestamp</b>
+- in_shop_orders insertion test query : insert into in_shop_orders (member_id, partnership_id, selling_price, reduced_price, created_on) values (101905, 55, 34.20, 30.00, now());
+
+### Member [GET]
+
++ Request
+
+    + Headers
+    
+            Accept-Language: fr
+
++ Parameters
+
+    + member_id (number) - ID of the researched member
+    
++ Response 200 (application/json)
+
+        {
+            "status": 0,
+            "message": "OK",
+            "last_update": 1473693115,
+            "data": {
+                "id": 101905,
+                "sympass_id": "6199318",
+                "login": "6199318",
+                "password": "acd36663cc98e4a18664b892b344fac9",
+                "role": "member",
+                "gender": "male",
+                "first_name": "Cedric",
+                "last_name": "VOZ",
+                "email": "voz.cedric@gmail.com",
+                "email_personal": "voz.cedric@gmail.com",
+                "language": "fr",
+                "phone": "+32494865147",
+                "mobile": "+32494865147",
+                "function": "CTO",
+                "date_of_birth": "1900-01-01",
+                "last_access_date": "2016-09-01 16:11:35",
+                "status": 0,
+                "options": 31,
+                "hobbies": 58,
+                "department": "Emresa",
+                "reference": "",
+                "valid_from": "2015-04-17 00:00:00",
+                "valid_to": "2033-04-16 00:00:00",
+                "activated_on": "2016-05-04 15:28:37",
+                "created_at": "2014-04-07 17:15:36",
+                "updated_at": "2016-09-12 16:11:55",
+                "address": {
+                    "id": 1714,
+                    "title": "Siège",
+                    "street": "63-65 route du Canal",
+                    "locality": "Esch/Alzette",
+                    "postal_code": "L-4051",
+                    "country": "LU",
+                    "latitude": 49.4938354,
+                    "longitude": 5.9751373
+                },
+                "in_shop_orders": [
+                    {
+                        "selling_price": 1,
+                        "reduced_price": 0.95,
+                        "created_on": "2016-07-26 11:28:39",
+                        "name": "CK Sport Center",
+                        "partnership_id": 4
+                    },
+                    {
+                        "selling_price": 2,
+                        "reduced_price": 1.7,
+                        "created_on": "2016-07-26 11:28:17",
+                        "name": "Les Mômes",
+                        "partnership_id": 213
+                    },
+                    {
+                        "selling_price": 5,
+                        "reduced_price": 4,
+                        "created_on": "2016-07-25 09:39:49",
+                        "name": "Pain World",
+                        "partnership_id": 9
+                    }
+                ],
+                "total_amount_spent": 26184.92,
+                "total_amount_saved": 3752.08,
+                "client_id": 1,
+                "client_name": "Emresa",
+                "client_slug": "-emresa",
+                "client_logo": "https://www.sympass.lu/img/clients/1.png",
+                "ticketing_service_id": 52,
+                "conciergerie_alert": 2
+            }
+        }
+        
+### Update Member [PUT]
+The App will sent a dict with some data to update in the Member entity
+<b>WARNING</b> Change login will revoke the user's token
+
++ Request
+
+    + Headers
+    
+            Accept-Language: fr
+
++ Request (application/json)
+
+        {
+            "in_shop_orders": 
+                [
+                    {
+                        "created_on": "2016-01-19 12:30:00",
+                        "selling_price": 26,
+                        "reduced_price": 20,
+                        "partner_id": 583
+                    },
+                    {
+                        "created_on": "2016-01-20 12:12:00",
+                        "selling_price": 24,
+                        "reduced_price": 12,
+                        "partner_id": 623
+                    }
+                ],
+            "login": "Toto",
+            "email_personal": "john@doe.com",
+            "options": 3,
+            "address_id": 1714,
+            "gender": "male",
+            "first_name": "John",
+            "last_name": "Doe",
+            "language": "fr",
+            "phone": "12 23 38 87",
+            "mobile": "6 682 338 298",
+            "function": "CIO",
+            "hobbies": 17
+        }
+
++ Parameters
+
+    + member_id (number) - ID of the member to update
+    
++ Response 200 (application/json)
+
+        {
+            "status": 0,
+            "message": "OK"
+        }
+    
+
+
+## Check Login Validity [/api/check-login-validity]
+Will verify if a provided login can be used or not.
+
+A valid login must : 
+- not be used by another member ...
+- respect this pattern : `/\^[A-Za-z0-9]{5,21}$/`
+
+Send a login in request with the owner "101905"
+Examples : 
+- {"login":"johndoe"} is correct because it's not used
+- {"login":"6199318"} is correct because it's the current member login
+- {"login":"john"} is not correct (too short)
+- {"login":"8610787"} is not correct (already used by another member)
+
+### Verify login [POST]
+
++ Request
+
+    + Headers
+    
+            Accept-Language: fr
+
++ Request (application/json)
+
+        {
+            "login": "johndoe",
+        }
+        
++ Response 200 (application/json)
+
+        {
+            "status": 0,
+            "message": "Valid login"
+        }
+
+
+
+## Discounts Collection [/api/discounts/{last_update}]
+Discounts are available to partners.
+A discount can be a limited in time discount, with a date from and a date to availability.
+API Discounts request will only fetch the active discounts
+
+*Note : An active discount is :*
+- status is not suspended
+- valid_from value is less than now
+- valid_to value is greather than now
+
+**Discount attributes:**  
+
+<table>  
+    <thead><th>Name</th><th>Type</th><th>Nullable</th><th>Description</th></thead>
+    <tbody>
+        <tr><td>id</td><td>Number</td><td>False</td><td>Unique identifier</td></tr>      
+        <tr><td>title</td><td>Number</td><td>False</td><td>Discount title</td></tr>      
+        <tr><td>description</td><td>String</td><td>False</td><td>Discount description</td></tr>
+        <tr><td>attention_catcher</td><td>String</td><td>True</td><td>Discount attention catcher will appear in discount section's cards website e.g.</td></tr>
+        <tr><td>countries</td><td>Number</td><td>True</td><td>* Check the discounts countries description bellow</td></tr>
+        <tr><td>minimum</td><td>String</td><td>False</td><td>Minimum discount value (can be equal to zero)</td></tr>
+        <tr><td>maximum</td><td>String</td><td>False</td><td>Maximum discount value</td></tr>
+        <tr><td>caption</td><td>String</td><td>True</td><td>Discount caption</td></tr>
+        <tr><td>disclaimer</td><td>String</td><td>True</td><td>Discount disclaimer</td></tr>
+        <tr><td>valid_from</td><td>Timestamp without Timezone</td><td>True</td><td>Valid from this date</td></tr>
+        <tr><td>valid_to</td><td>Timestamp without Timezone</td><td>True</td><td>Valid to this date</td></tr>
+        <tr><td>flags</td><td>String</td><td>False</td><td>* Check the discounts flags description bellow</td></tr>
+        <tr><td>type</td><td>Number</td><td>False</td><td>* Check the discounts types description bellow</td></tr>
+        <tr><td>status</td><td>Number</td><td>False</td><td>* Check the discounts statuses description bellow</td></tr>
+        <tr><td>created_at</td><td>Timestamp without Timezone</td><td>False</td><td>Creation datetime</td></tr>      
+        <tr><td>updated_at</td><td>Timestamp without Timezone</td><td>False</td><td>Update datetime</td></tr>      
+        <tr><td>categories</td><td>JSON</td><td>False</td><td>Categories list related to a discount</td></tr>
+        <tr><td>partner_name</td><td>String</td><td>False</td><td>Partner name</td></tr>      
+        <tr><td>partner_id</td><td>Number</td><td>False</td><td>Partner unique identifier</td></tr>      
+        <tr><td>partner_slug</td><td>String</td><td>False</td><td>Unique identifier based on partner name</td></tr>
+        <tr><td>partnership_id</td><td>Number</td><td>False</td><td>Partnership unique identifier (used for "in shop orders" relation)</td></tr>      
+    </tbody>
+</table>     
+   
+**Discount statuses (not combinable):**  
+
+<table>  
+    <thead><th>Name</th><th>Value</th><th>Description</th></thead>
+    <tbody>
+        <tr><td>SUSPENDED</td><td>1</td><td>Partner is suspended</td></tr>      
+    </tbody>
+</table>
+
+**Discount flags (combinable):**  
+
+<table>  
+    <thead><th>Name</th><th>Binary value</th><th>Description</th></thead>
+    <tbody>
+        <tr><td>NONE</td><td>0</td><td>Discount is not limited in time</td></tr>
+        <tr><td>LIMITED</td><td>1</td><td>Discount is limited in time</td></tr>
+        <tr><td>CORPORATE</td><td>2</td><td>Discount may only be visible by a corporate member</td></tr>      
+        <tr><td>LEAFLET</td><td>4</td><td>Discount is configured to be pubicated in the Sympass leaflet</td></tr>      
+    </tbody>
+</table>
+
+**Discount types (not combinable):**  
+
+<table>  
+    <thead><th>Name</th><th>Binary value</th><th>Description</th></thead>
+    <tbody>
+        <tr><td>IN_SHOP</td><td>1</td><td>Discount is available in shop with Sympass card</td></tr>
+        <tr><td>TICKET</td><td>2</td><td>Discount can be available from a ticket (sell in Sympass ticketing section)</td></tr>      
+        <tr><td>ONLINE</td><td>4</td><td>Discount is only available online</td></tr>      
+    </tbody>
+</table>
+
+**Discount available countries (combinable):**  
+
+<table>  
+    <thead><th>Name</th><th>Binary value</th><th>Description</th></thead>
+    <tbody>
+        <tr><td>NONE</td><td>0</td><td>No country specified</td></tr>
+        <tr><td>LUXEMBURG</td><td>1</td><td>Discount is available in Luxemburg</td></tr>
+        <tr><td>FANCE</td><td>2</td><td>Discount is available in France</td></tr>      
+        <tr><td>BELGIUM</td><td>4</td><td>Discount is available in Belgium</td></tr>
+        <tr><td>GERMANY</td><td>8</td><td>Discount is available in Germany</td></tr>      
+    </tbody>
+</table>
+
+### List All Discounts [GET]
+
++ Request
+
+    + Headers
+    
+            Accept-Language: fr
+
++ Parameters
+
+    + last_update (number) - get all updated discounts since this timestamp
+
++ Response 200 (application/json)
+
+        {
+            "status": 0,
+            "message": "OK",
+            "data": {
+                "new_or_updated_discounts": [
+                    {
+                        "id": 5560,
+                        "title": "Offre spéciale limitée ",
+                        "description": "Profitez de vos tickets d'entrée pour l'espace Marineland + Kid's Island + Adventure Golf au tarif spécial de: Adultes: 30 € au lieu de 49,40€Enfants: 20€ au lieu de 40€<br><br>Offre limitée, valable jusqu'à épuisement du stock.<br>Disponible actuellement dans votre espace billetterie \"parcs d'attractions\".<br><br><br>",
+                        "attention_catcher": "Offre spéciale limitée - Vos tickets d'entrée pour l'espace Marineland + Kid's Island + Adventure Golf aux tarifs Adultes de 30€ au lieu de 49,40€ et Enfants: 20€ au lieu de 40€",
+                        "countries": 2,
+                        "minimum": 40,
+                        "maximum": 50,
+                        "caption": null,
+                        "disclaimer": "Valable jusqu'au 31/08 dans la limite des stocks disponible dans votre espace billetterie",
+                        "valid_from": "2016-08-04 00:00:00",
+                        "valid_to": "2016-09-15 00:00:00",
+                        "flags": 1,
+                        "type": 2,
+                        "status": 0,
+                        "created_at": null,
+                        "updated_at": null,
+                        "categories": null,
+                        "partner_name": "Espace Marineland",
+                        "partner_id": 1140,
+                        "partnership_id": 1012,
+                        "partner_slug": "-espace-marineland"
+                    },
+                    {
+                        "id": 4272,
+                        "title": " Offre spéciale \"soin après-soleil\"",
+                        "description": "Du 25/08 au 15/09, votre institut de beauté Lipotherm Center, spécialisé en esthétique avancée, vous propose :<br />Un soin après-soleil comprenant : démaquillage, gommage, modelage cou-décolleté , radio fréquence et masque hydratant, à 49€ au lieu de 118€ soit 58% de remise.<br><br>Sur présentation de votre carte Sympass.<br>",
+                        "attention_catcher": " Offre spéciale \"soin après-soleil\" ! 5 étapes à prix extra .",
+                        "countries": 1,
+                        "minimum": 0,
+                        "maximum": 58,
+                        "caption": null,
+                        "disclaimer": null,
+                        "valid_from": "2016-08-25 00:00:00",
+                        "valid_to": "2016-09-15 00:00:00",
+                        "flags": 1,
+                        "type": 1,
+                        "status": 0,
+                        "created_at": null,
+                        "updated_at": null,
+                        "categories": [
+                            {
+                                "category": "beauté, bien-être, santé",
+                                "subcategory": "instituts de beauté"
+                            },
+                            {
+                                "category": "beauté, bien-être, santé",
+                                "subcategory": "amincissement"
+                            },
+                            {
+                                "category": "beauté, bien-être, santé",
+                                "subcategory": "relaxation, bien-être"
+                            }
+                        ],
+                        "partner_name": "LIPOTHERM Center",
+                        "partner_id": 1082,
+                        "partnership_id": 929,
+                        "partner_slug": "-lipotherm-center"
+                    },
+                    {
+                        "id": 5569,
+                        "title": "Protéger ses yeux , ce n'est pas uniquement l'été ! Offre spéciale sur les lunettes solaires! ",
+                        "description": "Sur présentation de votre carte Sympass, bénéficiez de: 30% de remise sur toutes solaires RAY-BAN<br>50% de remise sur toutes les autres paires de lunettes solaires<br>De nombreuses offres spéciales vous seront proposées tout au long de l’année, pour les connaitre vérifiez votre inscription à la newsletter hebdomadaire, si vous ne la recevez pas contactez-nous à info@sympass.lu",
+                        "attention_catcher": "Protéger ses yeux , ce n'est pas uniquement l'été ! Offre spéciale sur les lunettes solaires! ",
+                        "countries": 1,
+                        "minimum": 30,
+                        "maximum": 50,
+                        "caption": null,
+                        "disclaimer": null,
+                        "valid_from": "2016-09-02 00:00:00",
+                        "valid_to": "2016-09-17 00:00:00",
+                        "flags": 1,
+                        "type": 1,
+                        "status": 0,
+                        "created_at": null,
+                        "updated_at": null,
+                        "categories": [
+                            {
+                                "category": "beauté, bien-être, santé",
+                                "subcategory": "optique, audition"
+                            }
+                        ],
+                        "partner_name": "Optique Quaring",
+                        "partner_id": 783,
+                        "partnership_id": 361,
+                        "partner_slug": "-optique-quaring"
+                    },
+                ],
+                "deleted_discounts": [
+                    5058,
+                    5299,
+                    5517,
+                    5535,
+                    5536,
+                    5537,
+                    5541,
+                    5551,
+                    5554,
+                    5555,
+                    5556,
+                    5557,
+                    5558,
+                    5562,
+                    5567,
+                    5568
+                ]
+            }
+        }
+
+
+
+## Discount [/api/discount/{discount_id}]
+Get one discount
+
+### View a Discount details [GET]
+
++ Request
+
+    + Headers
+    
+            Accept-Language: fr
+
++ Parameters
+
+    + discount_id (number) - ID of the researched discount
+    
++ Response 200 (application/json)
+
+        {
+            "status": 0,
+            "message": "OK",
+            "last_update": 1464702694,
+            "data": {
+                "id": 5319,
+                "title": "Offrez-vous un shooting photo pour la Saint Valentin",
+                "description": "Grâce à Sympass, bénéficiez chez Nina Pepite de:<br>20% de remise sur 1 Mini Shoot Studio d'1/2 heure + 15 photos retouchées sur CD en HD soit au prix Sympass de 80€ au lieu de 100€ tarif public, 20% de remise sur 1 Shooting Photo + Exterieur d'1h30  + 25 photos retouchées sur CD en HD + 2 agrandissements 20X30 au prix Sympass de 120€ au lieu de 150€ tarif public. <br><br>Ces remises ne sont pas cumulables avec d'autres offres spéciales, promotions, carte de fidélité, rabais...<br />",
+                "attention_catcher": "Offrez-vous un shooting photo pour la Saint Valentin",
+                "countries": 2,
+                "minimum": 0,
+                "maximum": 20,
+                "caption": "",
+                "disclaimer": "",
+                "valid_from": "2016-02-01 00:00:00",
+                "valid_to": "2016-02-13 00:00:00",
+                "flags": 1,
+                "type": 1,
+                "status": 1,
+                "created_at": "2016-02-01 11:48:42",
+                "updated_at": "2016-05-31 14:51:34",
+                "categories": [
+                    {
+                        "category": "services variés",
+                        "subcategory": "photos"
+                    },
+                    {
+                        "category": "mode",
+                        "subcategory": "vêtements, accessoires"
+                    }
+                ],
+                "partner_name": "Nina Pepite",
+                "partner_id": 1613,
+                "partnership_id": 1530,
+                "partner_slug": "-nina-pepite"
+            }
+        }
+
+
+
+## Addresses Collection [/api/clients-addresses/{contract_type_or_client_id}]
+Addresses will be used for partners geolocalization e.g. if `contract_type_or_client_id` parameter is `partner`
+Or used to populate a dropdown of client addresses list in member profile e.g. if contract_type_or_client_id is a `[client_id]`
+
+**Address attributes:**  
+
+<table>  
+    <thead><th>Name</th><th>Type</th><th>Nullable</th><th>Description</th></thead>
+    <tbody>
+        <tr><td>id</td><td>Number</td><td>False</td><td>Unique identifier</td></tr>      
+        <tr><td>client_id</td><td>Number</td><td>False</td><td>Client / Partner id. Can be used to route to the partner custom page</td></tr>
+        <tr><td>client_slug</td><td>String</td><td>False</td><td>Unique identifier based on the Client / Partner name. Can be used to route to the partner custom page</td></tr>
+        <tr><td>client_name</td><td>Stringr</td><td>False</td><td>Client / Partner name</td></tr>      
+        <tr><td>title</td><td>String</td><td>False</td><td>Address denomination</td></tr>
+        <tr><td>street</td><td>String</td><td>False</td><td>Street + number</td></tr>      
+        <tr><td>additional_details</td><td>String</td><td>True</td><td>Floor 2, Apt 1 e.g.</td></tr>      
+        <tr><td>locality</td><td>String</td><td>False</td><td>Address city</td></tr>      
+        <tr><td>postal_code</td><td>String</td><td>False</td><td>Alnum Postal code</td></tr>      
+        <tr><td>country</td><td>String</td><td>False</td><td>Country ISO Code (2 chars uppercase)</td></tr>      
+        <tr><td>longitude</td><td>Float</td><td>True</td><td>Longitude</td></tr>      
+        <tr><td>latitude</td><td>Float</td><td>True</td><td>Latitude</td></tr>      
+    </tbody>
+</table>     
+   
+   
+### List All Addresses [GET]
+
++ Request
+
+    + Headers
+    
+            Accept-Language: fr
+
++ Parameters
+
+    + contract_type_or_client_id (string) - contract type. Can be 'client' or 'partner'
+    
++ Response 200 (application/json)
+
+        {
+            "status": 0,
+            "message": "",
+            "data": [
+                {
+                    "id": 2321,
+                    "client_id": 583,
+                    "client_name": "Sephora",
+                    "client_slug": "-sephora",
+                    "title": "Boutique",
+                    "street": "16 avenue de la gare",
+                    "additional_details": "",
+                    "locality": "Luxembourg",
+                    "postal_code" : "L-1610",
+                    "country" : "LU",
+                    "longitude" : 5.9294,
+                    "latitude" : 49.9665
+                }, {
+                    "id": 2320,
+                    "client_id": 583,
+                    "client_name": "Sephora",
+                    "client_slug": "-sephora",
+                    "title": "Boutique",
+                    "street": "73 GRAND-RUE",
+                    "additional_details": "",
+                    "locality": "Luxembourg",
+                    "postal_code" : "L-1610",
+                    "country" : "LU",
+                    "longitude" : 6.12851,
+                    "latitude" : 49.6121
+                }, {
+                    "id": 2319,
+                    "client_id": 583,
+                    "client_name": "Sephora",
+                    "client_slug": "-sephora",
+                    "title": "Boutique",
+                    "street": "5 CC AUCHAN RUE ALPHONSE WEICKER",
+                    "additional_details": "",
+                    "locality": "Kirchberg",
+                    "postal_code" : "L-2721",
+                    "country" : "LU",
+                    "longitude" : 49.6331,
+                    "latitude" : 49.9665
+                }, {
+                    "id": 2318,
+                    "client_id": 583,
+                    "client_name": "Sephora",
+                    "client_slug": "-sephora",
+                    "title": "Boutique",
+                    "street": "69 rue de l'Alzette",
+                    "additional_details": "",
+                    "locality": "Esch-sur-alzette",
+                    "postal_code" : "L-1610",
+                    "country" : "LU",
+                    "longitude" : 5.98058,
+                    "latitude" : 49.4937
+                }
+            ]
+        }
+
+
+
+## Address [/api/client-address/{id}]
+Get one Client / Partner Address
+
+### View an address details [GET]
+
++ Request
+
+    + Headers
+    
+            Accept-Language: fr
+
++ Parameters
+
+    + id (number) - ID of the researched client|partner's address
+   
++ Response 200 (application/json)
+
+        {
+            "status": 0,
+            "message": "OK",
+            "data": {
+                "id": 2296,
+                "title": "Siège",
+                "street": "26 Rue des Faubourgs",
+                "additional_details": null,
+                "locality": "Arlon",
+                "postal_code": "6700",
+                "country": "BE",
+                "latitude": 49.6884119,
+                "longitude": 5.8166288,
+                "client_id": 570,
+                "client_name": "Vital Sun",
+                "client_slug": "-vital-sun"
+            }
+        }
+
+
+
+## Partners Collection [/api/partners/{modified_since}]
+Partners are `clients` with a `partnership` contract. 
+
+**Partner attributes:**  
+
+<table>  
+    <thead><th>Name</th><th>Type</th><th>Nullable</th><th>Description</th></thead>
+    <tbody>
+        <tr><td>id</td><td>Number</td><td>False</td><td>Client unique identifier</td></tr>      
+        <tr><td>name</td><td>String</td><td>False</td><td>Partner name</td></tr>      
+        <tr><td>slug</td><td>String</td><td>False</td><td>Unique identifier based on partner name</td></tr>
+        <tr><td>language</td><td>String</td><td>False</td><td>Spoken language</td></tr>
+        <tr><td>status</td><td>Number</td><td>False</td><td>* Check the partners statuses description bellow</td></tr>      
+        <tr><td>valid_from</td><td>Timestamp without Timezone</td><td>False</td><td>Valid from this date (contract)</td></tr>      
+        <tr><td>valid_to</td><td>Timestamp without Timezone</td><td>True</td><td>Valid to this date (contract). Null if not defined</td></tr>      
+        <tr><td>activated_on</td><td>Timestamp without Timezone</td><td>True</td><td>Activation date</td></tr>      
+        <tr><td>deactivated_on</td><td>Timestamp without Timezone</td><td>True</td><td>Deactivation date</td></tr>      
+        <tr><td>created_at</td><td>Timestamp without Timezone</td><td>False</td><td>Creation datetime</td></tr>      
+        <tr><td>updated_at</td><td>Timestamp without Timezone</td><td>False</td><td>Update datetime</td></tr>      
+        <tr><td>title</td><td>String</td><td>False</td><td>Partner's short presentation (depends of language)</td></tr>      
+        <tr><td>presentation</td><td>String</td><td>False</td><td>Partner's full presentation (depends of language)</td></tr>      
+        <tr><td>keywords</td><td>String</td><td>True</td><td>Keywords used for research (usually comma separated)</td></tr>      
+        <tr><td>facebook</td><td>String</td><td>True</td><td>Facebook page</td></tr>      
+        <tr><td>website</td><td>String</td><td>True</td><td>Website address</td></tr>      
+        <tr><td>brands</td><td>String</td><td>True</td><td>Which brands are sold by this partner ? (usually comma separated values)</td></tr>
+        <tr><td>minimum_discount</td><td>Number</td><td>True</td><td>Minimum discount value in % (only for partners list)</td></tr>      
+        <tr><td>maximum_discount</td><td>Number</td><td>True</td><td>Maximum discount value in % (only for partners list)</td></tr>      
+        <tr><td>phone</td><td>String</td><td>True</td><td>Phone number of the first contact in partner's contacts list</td></tr>      
+        <tr><td>addresses</td><td>JSON</td><td>False</td><td>Array of partner's addresses</td></tr>
+        <tr><td>contacts</td><td>JSON</td><td>False</td><td>Array of partner's contacts</td></tr>
+        <tr><td>logo</td><td>String</td><td>False</td><td>A link to the partner logo</td></tr>      
+        <tr><td>banner</td><td>String</td><td>False</td><td>A link to the partner banner</td></tr> 
+        <tr><td>partnership_id</td><td>Number</td><td>False</td><td>Partnership unique identifier (used for "in shop orders" relation)</td></tr>
+        <tr><td>categories</td><td>JSON</td><td>False</td><td>Categories of partner's related discounts</td></tr>
+    </tbody>
+</table>     
+   
+**Partner statuses (not combinable):**  
+
+<table>  
+    <thead><th>Name</th><th>Binary value</th><th>Description</th></thead>
+    <tbody>
+        <tr><td>NONE</td><td>0</td><td>None</td></tr>      
+        <tr><td>SUSPENDED</td><td>1</td><td>Partner is suspended</td></tr>      
+    </tbody>
+</table>
+
+**Contact types (combinable):**
+
+<table>  
+    <thead><th>Name</th><th>Binary value</th></thead>
+    <tbody>
+        <tr><td>MAIN</td><td>1</td></tr>
+        <tr><td>HR</td><td>2</td></tr>
+        <tr><td>MANAGEMENT</td><td>4</td></tr>
+        <tr><td>CONCIERGERIE_MAIN</td><td>8</td></tr>
+        <tr><td>TICKETING_MANAGER</td><td>16</td></tr>
+        <tr><td>CARDS_MANAGER</td><td>32</td></tr>
+        <tr><td>INVOICING</td><td>64</td></tr>
+        <tr><td>INTERNAL_COMMUNICATION</td><td>128</td></tr>
+        <tr><td>EXTERNAL_COMMUNICATION</td><td>256</td></tr>
+        <tr><td>STAFF_DELEGATION</td><td>512</td></tr>
+        <tr><td>PURCHASES</td><td>1024</td></tr>
+    </tbody>
+</table>
+
+### List All Partners [GET]
+
++ Request
+
+    + Headers
+    
+            Accept-Language: fr
+
++ Parameters
+
+    + modified_since (number) - get all updated partners since this timestamp
+
++ Response 200 (application/json)
+
+        {
+            "status": 0,
+            "message": "OK",
+            "data": {
+                "new_or_updated_partners": [
+                    {
+                        "id": 1684,
+                        "name": "Vins + Vins, négociants à Bordeaux",
+                        "slug": "-vins-vins-negociants-a-bordeaux",
+                        "language": "fr",
+                        "status": 0,
+                        "valid_from": "2016-06-20 00:00:00",
+                        "valid_to": null,
+                        "activated_on": null,
+                        "deactivated_on": null,
+                        "created_at": "2016-06-10 15:54:14",
+                        "updated_at": "2016-08-25 23:00:33",
+                        "title": "VINS + VINS, négociants à Bordeaux",
+                        "presentation": "Vins + Vins est une société de négoce bordelaise spécialisée dans les vins, champagnes et produits fins, partenaire n°1 des entreprises en France.<br>Vins + Vins est leader en France dans le B2B et la vente aux salariés avec une gamme de 2 000 références à notre catalogue et plus de 1 000 000 de bouteilles en stock, dont quelques très grands crus et des vieux millésimes. La plupart de nos vins sont médaillés aux concours agricoles ou récompensés dans les guides spécialisés. Ils sont tous conservés dans d'excellentes conditions. Au moment de déguster ces vins, nos critères de sélection n’ont pas porté sur l’étiquette mais plus que jamais sur la qualité !<br>PRIVILEGES ADHERENT SYMPASS <br>     1/ Accès à l’offre Coups de Cœur : une soixantaine des meilleurs rapports qualité prix de notre gamme avec des tarifs réduits de - 15 à - 45 % par rapport aux prix publics. <br>Pour télécharger les Offres Coups de Cœur, cliquer sur ce lien Pour télécharger le bon de commandes des Offres Coups de Coeur, cliquer sur ce lien <br>     2/ Accès à l’offre BORDEAUX PRIMEURS qui va permettre aux amateurs de se porter acquéreurs de crus du fameux millésime 2015 : 5% à faire valoir sur ces offres (remise déduite en bas du bon de commande).<br>Pour télécharger l'Offre PRIMEUR 2015, cliquer sur ce lien Pour télécharger le bon de commande PRIMEURS 2015, cliquer sur ce lien <br>     3/ Accès à l’Offre Grands Crus concerne les amateurs passionnés qui aiment à goûter et collectionner des crus d'exception : Grands Crus Classés de Bordeaux, très grands domaines de Bourgogne, vignerons confidentiels, cuvées mythiques et millésimes d'anthologie etc.<br>Pour télécharger l'Offre Grands Crus, cliquer sur ce lien Pour télécharger le bon de commande de l'Offre Grands Crus, cliquer sur ce lien <br>     4/ Conseil œnologique en français et anglais : rappel sous 24h<br />Thomas Andrieu – Tandrieu@vinsplusvins.fr – 0033 (0)6 71 58 00 75 <br /><br>Modalités de livraison : par carte bleue ou virement     . Frais de Port pour la France : 3-12 blles à 16 €TTC, 15-24 blles à 20 €TTC, 27-36 blles à 25 €TTC, 39-57 blles à 30 €TTC => Franco de port à 60 bouteilles     . Frais de Port pour Luxembourg : compter 2€TTC par bouteille avec un minimum forfaitaire de 25€ TTC.      . Expédition partout dans le monde : sur devis <br>Pour profiter et commander :      1/ Télécharger les offres et bons de commande en cliquant sur les liens ci-dessus,      2/ Remplir le bon de commande avec nom, adresse et téléphone portable et envoyer le bon de commande à tandrieu@vinsplusvins.fr      3/ A réception de la commande, vous recevrez les modalités de paiement.      4/ A réception de paiement, les vins vous seront expédiés par transporteur avec une alerte par mail/SMS préalable. <br />",
+                        "keywords": "VINS + VINS, négociants à Bordeaux",
+                        "facebook": null,
+                        "website": "http://www.vinsplusvins.fr/",
+                        "brands": null,
+                        "minimumDiscount": 0,
+                        "maximumDiscount": 45,
+                        "phone": "Contact: Thomas Andrieu 0033 (0)6 71 58 00 75 / 0033 (0)5 56 95 70 95",
+                        "addresses": [
+                            {
+                                "id": 3850,
+                                "title": "Principale",
+                                "street": "133, rue Pierre Ramond",
+                                "comment": null,
+                                "country": "FR",
+                                "latitude": 44.9037849,
+                                "locality": "Saint Médard en Jalles",
+                                "client_id": 1684,
+                                "longitude": -0.810357,
+                                "reference": "",
+                                "postal_code": "33160",
+                                "conciergerie_id": null,
+                                "is_head_quarter": true,
+                                "can_be_displayed": true,
+                                "additional_details": null,
+                                "is_delivery_address": true,
+                                "is_invoicing_address": true
+                            }
+                        ],
+                        "contacts": [
+                            {
+                                "id": 11037,
+                                "fax": null,
+                                "name": "ANDRIEU Thomas",
+                                "type": 65,
+                                "email": "tandrieu@vinsplusvins.fr",
+                                "phone": "Contact: Thomas Andrieu 0033 (0)6 71 58 00 75 / 0033 (0)5 56 95 70 95",
+                                "gender": "male",
+                                "comment": null,
+                                "client_id": 1684
+                            }
+                        ],
+                        "logo": "http://local.sympass-v3.lu:10088/img/partners/logos/1566.png",
+                        "banner": "http://local.sympass-v3.lu:10088/img/partners/banners/1566.jpg",
+                        "partnership_id": 1566,
+                        "categories": [
+                            {
+                                "category": "gastronomie",
+                                "subcategory": "vins & spiritueux"
+                            }
+                        ]
+                    },
+                    {
+                        "id": 841,
+                        "name": "Yves Rocher - Luxembourg",
+                        "slug": "-yves-rocher-luxembourg",
+                        "language": "fr",
+                        "status": 0,
+                        "valid_from": "2015-12-14 00:00:00",
+                        "valid_to": null,
+                        "activated_on": null,
+                        "deactivated_on": null,
+                        "created_at": "2014-12-14 10:20:38",
+                        "updated_at": "2016-08-25 09:23:10",
+                        "title": "Votre centre de beauté",
+                        "presentation": "Epilation, centre de beauté, soin du corps et du visage, manucure, pédicure, cures amincissantes, vente de produits cosmétiques, conseils...<br />Horaires d’ouverture:<br />>> Avenue de la Porte Neuve <br />Lundi : 10h00 à 18h00. <br />Mardi : 9h00 à 18h00. <br />Jeudi : 9h00 à 18h00. <br />Vendredi : 9h00 à 19h00. <br />Samedi : 9h00 à 18h00.<br />>> Avenue de la Gare <br />Lundi : de 10h00 à 18h00 <br />Mardi au samedi : 9h00 à 18h00<br />>> Auchan Kirchberg <br />Lundi au Jeudi : 9h00 à 20h00 <br />Vendredi : 9h00 à 21h00 <br />Samedi : 9h00 à 18h00<br /><br />Mots-clés pour application Sympass pour Iphone: institut de beauté, soins, esthétique...<br /><br />Afficher les adresses pour: <br />22a, avenue de la Porte-Neuve <br />33, avenue de la Gare <br />CC Auchan ",
+                        "keywords": "Votre centre de beauté",
+                        "facebook": "https://www.facebook.com/yvesrocher.belgique",
+                        "website": "http://www.yvesrocher.com",
+                        "brands": "yves rocher",
+                        "minimumDiscount": 10,
+                        "maximumDiscount": 30,
+                        "phone": "(+352)  22 36 70",
+                        "addresses": [
+                            {
+                                "id": 2761,
+                                "title": "Boutique Porte Neuve Luxembourg",
+                                "street": "22, Avenue Porte Neuve",
+                                "comment": null,
+                                "country": "LU",
+                                "latitude": 49.6207064,
+                                "locality": "Luxembourg",
+                                "client_id": 841,
+                                "longitude": 6.1440637,
+                                "reference": "",
+                                "postal_code": "L-2226",
+                                "conciergerie_id": null,
+                                "is_head_quarter": true,
+                                "can_be_displayed": true,
+                                "additional_details": null,
+                                "is_delivery_address": true,
+                                "is_invoicing_address": true
+                            },
+                            {
+                                "id": 2763,
+                                "title": "Boutique Auchan Kirchberg",
+                                "street": "Centre Commercial Auchan - rue Alphonse Weicker",
+                                "comment": null,
+                                "country": "LU",
+                                "latitude": 49.6331813,
+                                "locality": "Kirchberg",
+                                "client_id": 841,
+                                "longitude": 6.1694365,
+                                "reference": "",
+                                "postal_code": "L-2721",
+                                "conciergerie_id": null,
+                                "is_head_quarter": null,
+                                "can_be_displayed": true,
+                                "additional_details": null,
+                                "is_delivery_address": null,
+                                "is_invoicing_address": null
+                            },
+                            {
+                                "id": 2762,
+                                "title": "Boutique Gare Luxembourg",
+                                "street": "33, Avenue de la Gare",
+                                "comment": null,
+                                "country": "LU",
+                                "latitude": 49.6028814,
+                                "locality": "Luxembourg",
+                                "client_id": 841,
+                                "longitude": 6.1332524,
+                                "reference": "",
+                                "postal_code": "L-1611",
+                                "conciergerie_id": null,
+                                "is_head_quarter": null,
+                                "can_be_displayed": true,
+                                "additional_details": null,
+                                "is_delivery_address": null,
+                                "is_invoicing_address": null
+                            },
+                            {
+                                "id": 3912,
+                                "title": "Centre Commercial Bertrange",
+                                "street": "Route d'Arlon - Shopping Center La Belle Etoile",
+                                "comment": null,
+                                "country": "LU",
+                                "latitude": 0,
+                                "locality": "Bertrange",
+                                "client_id": 841,
+                                "longitude": 0,
+                                "reference": "",
+                                "postal_code": "L-8050",
+                                "conciergerie_id": null,
+                                "is_head_quarter": null,
+                                "can_be_displayed": true,
+                                "additional_details": null,
+                                "is_delivery_address": null,
+                                "is_invoicing_address": null
+                            },
+                            {
+                                "id": 2764,
+                                "title": "Boutique Esch sur Alzette",
+                                "street": "77, 79 rue de l'Alzette",
+                                "comment": null,
+                                "country": "LU",
+                                "latitude": 49.4938354,
+                                "locality": "Esch-sur-Alzette",
+                                "client_id": 841,
+                                "longitude": 5.9751373,
+                                "reference": "",
+                                "postal_code": "L-4051",
+                                "conciergerie_id": null,
+                                "is_head_quarter": null,
+                                "can_be_displayed": true,
+                                "additional_details": null,
+                                "is_delivery_address": null,
+                                "is_invoicing_address": null
+                            }
+                        ],
+                        "contacts": [
+                            {
+                                "id": 11002,
+                                "fax": null,
+                                "name": "Karine Eisenbarth",
+                                "type": 65,
+                                "email": "capnature.lu@wanadoo.fr",
+                                "phone": "(+352)  22 36 70",
+                                "gender": "female",
+                                "comment": "621 30 30 08 / eisenbarth.franck@wanadoo.fr",
+                                "client_id": 841
+                            }
+                        ],
+                        "logo": "http://local.sympass-v3.lu:10088/img/partners/logos/488.png",
+                        "banner": "http://local.sympass-v3.lu:10088/img/partners/banners/488.jpg",
+                        "partnership_id": 488,
+                        "categories": [
+                            {
+                                "category": "beauté, bien-être, santé",
+                                "subcategory": "instituts de beauté"
+                            }
+                        ]
+                    },
+                    {
+                        "id": 1000,
+                        "name": "ICI PARIS XL",
+                        "slug": "-ici-paris-xl",
+                        "language": "fr",
+                        "status": 0,
+                        "valid_from": "2009-12-11 00:00:00",
+                        "valid_to": null,
+                        "activated_on": null,
+                        "deactivated_on": null,
+                        "created_at": "2009-12-11 14:46:56",
+                        "updated_at": "2016-08-25 11:16:58",
+                        "title": "Votre partenaire parfumerie",
+                        "presentation": "<br />Depuis plus de 40 ans en Belgique et depuis 10 ans au Luxembourg, ICI PARIS XL déroule le tapis rouge pour ses millions de clients. <br> Depuis le début, la porte est ouverte à tous. ICI PARIS XL veut rendre les produits de luxe accessibles au grand public... une philosophie qui aujourd'hui encore reste vivace dans leurs parfumeries. Des conseillères professionnelles et des esthéticiennes sont présentes pour donner des conseils sur mesure aux clients.<br />ICI PARIS XL est LE spécialiste beauté par excellence en Luxembourg, offrant une large gamme en parfums, cosmétiques et soins.  <br />ICI PARIS XL vous offre LA réponse à votre demande en matière de soins personnalisés, et ce, grâce à des conseils sur mesure et à un service unique.<br />ICI PARIS XL est représenté dans tout le Luxembourg.<br />Horaires d'ouverture: <br />- ICI PARIS XL Shopping City Concorde: du lundi au jeudi de 9h à 20h, vendredi de 9h à 21h et samedi de 9h à 19h, dimanche fermé<br> - ICI PARIS XL Belval: du lundi au samedi de 10h à 19h, dimanche fermé<br> - ICI PARIS XL Shopping Topaze: du lundi au vendredi de 9h à 20h, samedi de 9h à 19h, dimanche fermé« Afin de toujours mieux vous accueillir, la parfumerie ICI PARIS XL à Luxembourg-Ville (Grand-RUE 47) déménage et est fermée depuis le 21/04/2016.<br />Mais, pas d’inquiétude, les parfumeries ICI PARIS XL de Bertrange, Mersch et Esch-sur-Alzette restent à votre disposition.<br />Nous vous informerons dans les plus brefs délais de l’ouverture de notre nouvelle parfumerie. »<br>",
+                        "keywords": "Votre partenaire parfumerie",
+                        "facebook": null,
+                        "website": "http://www.iciparisxl.lu",
+                        "brands": null,
+                        "minimumDiscount": 0,
+                        "maximumDiscount": 25,
+                        "phone": null,
+                        "addresses": [
+                            {
+                                "id": 2951,
+                                "title": "Boutique Bertrange",
+                                "street": "80 Shopping City Concorde- Route de Longwy",
+                                "comment": null,
+                                "country": "LU",
+                                "latitude": 49.6024634,
+                                "locality": "Bertrange",
+                                "client_id": 1000,
+                                "longitude": 6.072035,
+                                "reference": "",
+                                "postal_code": "8080",
+                                "conciergerie_id": null,
+                                "is_head_quarter": null,
+                                "can_be_displayed": true,
+                                "additional_details": null,
+                                "is_delivery_address": null,
+                                "is_invoicing_address": null
+                            },
+                            {
+                                "id": 2952,
+                                "title": "Boutique Esch sur Alzette",
+                                "street": "7 Avenue du Rock 'n Roll",
+                                "comment": null,
+                                "country": "LU",
+                                "latitude": 49.4998983,
+                                "locality": "Esch-sur-Alzette",
+                                "client_id": 1000,
+                                "longitude": 5.9474372,
+                                "reference": "",
+                                "postal_code": "4361",
+                                "conciergerie_id": null,
+                                "is_head_quarter": null,
+                                "can_be_displayed": true,
+                                "additional_details": null,
+                                "is_delivery_address": null,
+                                "is_invoicing_address": null
+                            },
+                            {
+                                "id": 3734,
+                                "title": "Grand-Duché du Luxembourg",
+                                "street": "Toutes les boutiques",
+                                "comment": null,
+                                "country": "LU",
+                                "latitude": 49.6024634,
+                                "locality": "Luxembourg",
+                                "client_id": 1000,
+                                "longitude": 6.072035,
+                                "reference": "",
+                                "postal_code": "situées au",
+                                "conciergerie_id": null,
+                                "is_head_quarter": true,
+                                "can_be_displayed": true,
+                                "additional_details": null,
+                                "is_delivery_address": null,
+                                "is_invoicing_address": null
+                            },
+                            {
+                                "id": 2954,
+                                "title": "Boutique Mersch",
+                                "street": "Shopping Topaze – Route de Colmarberg",
+                                "comment": null,
+                                "country": "LU",
+                                "latitude": 49.7525227,
+                                "locality": "Mersch",
+                                "client_id": 1000,
+                                "longitude": 6.1040622,
+                                "reference": "",
+                                "postal_code": "7525",
+                                "conciergerie_id": null,
+                                "is_head_quarter": null,
+                                "can_be_displayed": true,
+                                "additional_details": null,
+                                "is_delivery_address": true,
+                                "is_invoicing_address": true
+                            }
+                        ],
+                        "contacts": [
+                            {
+                                "id": 11018,
+                                "fax": "+32 2 340 06 80 (tél contact)",
+                                "name": "Manuel Servenay (directeur commercial) Koen Puttemans",
+                                "type": 1,
+                                "email": "m.servenay@be.aswatson.com",
+                                "phone": null,
+                                "gender": null,
+                                "comment": null,
+                                "client_id": 1000
+                            },
+                            {
+                                "id": 11019,
+                                "fax": null,
+                                "name": "Voets Jean-Francois",
+                                "type": 64,
+                                "email": "j.voets@be.aswatson.com",
+                                "phone": "0032 23400680",
+                                "gender": "male",
+                                "comment": null,
+                                "client_id": 1000
+                            },
+                            {
+                                "id": 11020,
+                                "fax": null,
+                                "name": "Frédéric Simon",
+                                "type": 1,
+                                "email": "f.simon@be.aswatson.com",
+                                "phone": "0032479249893",
+                                "gender": "male",
+                                "comment": "REMPLACANT DE KOEN",
+                                "client_id": 1000
+                            }
+                        ],
+                        "logo": "http://local.sympass-v3.lu:10088/img/partners/logos/797.png",
+                        "banner": "http://local.sympass-v3.lu:10088/img/partners/banners/797.jpg",
+                        "partnership_id": 797,
+                        "categories": [
+                            {
+                                "category": "beauté, bien-être, santé",
+                                "subcategory": "parfumeries, cosmétiques"
+                            }
+                        ]
+                    },
+                    
+                ],
+                "deleted_partners": [
+                    1567,
+                    877,
+                    1286,
+                    1436
+                ]
+            }
+        }
+
+
+
+## Partner [/api/partner/{partner_id_or_slug}]
+Get one Partner
+
+### View a Partner details [GET]
+
++ Request
+
+    + Headers
+    
+            Accept-Language: fr
+
++ Parameters
+
+    + partner_id_or_slug (number|string) - ID or slug of the researched partner
+    
++ Response 200 (application/json)
+
+        {
+            "status": 0,
+            "message": "OK",
+            "data": {
+                "id": 55,
+                "name": "Sephora Luxembourg",
+                "slug": "-sephora-luxembourg",
+                "language": "fr",
+                "status": 0,
+                "valid_from": "2015-12-14 00:00:00",
+                "valid_to": null,
+                "activated_on": "2015-12-14 10:20:29",
+                "deactivated_on": null,
+                "created_at": "2014-12-14 10:20:38",
+                "updated_at": "2016-06-09 09:01:51",
+                "title": "Votre parfumerie",
+                "presentation": "Afficher les adresses pour: <br /> CC AUCHAN  <br /> 73, Grand-Rue  <br /> <br />En plus des grandes marques classiques, venez découvrir les exclusivités parfum Sephora;  <br /> <br />* Narcisso Rodriguez  <br />* Emilio Pucci  <br />* Chloé  <br />* Fendi  <br /> <br />Pour répondre à vos attentes, retrouvez maintenant les marques Joop, Jill Sander homme et femme ainsi que la prestigieuse marque Indult.",
+                "keywords": "parfum, cosmétique, pour elle, pour femme, pour lui, pour homme",
+                "facebook": "",
+                "website": "http://www.sephora.com",
+                "brands": "",
+                "minimumDiscount": null,
+                "maximumDiscount": null,
+                "phone": "42 81 611",
+                "addresses": [
+                    {
+                        "id": 2318,
+                        "title": "Boutique Esch",
+                        "street": "69 rue de l'Alzette",
+                        "additional_details": null,
+                        "locality": "Esch-sur-Alzette",
+                        "postal_code": "L-4010",
+                        "country": "LU",
+                        "latitude": 49.4936857,
+                        "longitude": 5.9801763,
+                        "client_id": null,
+                        "client_name": null,
+                        "client_slug": null
+                    },
+                    {
+                        "id": 2319,
+                        "title": "Boutique Auchan Kirchberg",
+                        "street": "5 CC AUCHAN RUE ALPHONSE WEICKER",
+                        "additional_details": null,
+                        "locality": "Kirchberg",
+                        "postal_code": "2721",
+                        "country": "LU",
+                        "latitude": 49.6331813,
+                        "longitude": 6.1694365,
+                        "client_id": null,
+                        "client_name": null,
+                        "client_slug": null
+                    },
+                    {
+                        "id": 2321,
+                        "title": "Boutique Gare Luxembourg Ville",
+                        "street": "16 avenue de la gare",
+                        "additional_details": null,
+                        "locality": "Luxembourg",
+                        "postal_code": "L-1610",
+                        "country": "LU",
+                        "latitude": 49.6031729,
+                        "longitude": 6.1328221,
+                        "client_id": null,
+                        "client_name": null,
+                        "client_slug": null
+                    },
+                    {
+                        "id": 2320,
+                        "title": "Boutique Grand Rue Luxembourg Ville",
+                        "street": "73, Grand-rue",
+                        "additional_details": null,
+                        "locality": "Luxembourg",
+                        "postal_code": "1661",
+                        "country": "LU",
+                        "latitude": 49.612,
+                        "longitude": 6.129,
+                        "client_id": null,
+                        "client_name": null,
+                        "client_slug": null
+                    }
+                ],
+                "contacts": [
+                    {
+                        "id": 9509,
+                        "gender": null,
+                        "name": "Betty pour centre ville Claire à la gare, Rebecca pour Esch",
+                        "email": "mag0160@sephora.fr",
+                        "phone": "42 81 611",
+                        "fax": "24 61 83 70",
+                        "type": 1,
+                        "client_id": null,
+                        "client_name": null,
+                        "client_slug": null
+                    }
+                ],
+                "logo": null,
+                "banner": null,
+                "partnership_id": 55,
+                "categories": [
+                    {
+                        "category": "beauté, bien-être, santé",
+                        "subcategory": "parfumeries, cosmétiques"
+                    },
+                    {
+                        "category": "beauté, bien-être, santé",
+                        "subcategory": "instituts de beauté"
+                    },
+                    {
+                        "category": "beauté, bien-être, santé",
+                        "subcategory": "relaxation, bien-être"
+                    }
+                ]
+            }
+        }
+
+
+
+## Services Collection [/api/services]
+Get all enabled ticketing and conciergerie services for a member
+
+**Service attributes:**
+
+<table>  
+    <thead><th>Name</th><th>Type</th><th>Nullable</th><th>Description</th></thead>
+    <tbody>
+        <tr><td>id</td><td>Number</td><td>False</td><td>Unique identifier</td></tr>      
+        <tr><td>name</td><td>String</td><td>False</td><td>Service name</td></tr>      
+        <tr><td>slug</td><td>String</td><td>False</td><td>Unique identifier based on the Service internal name</td></tr>
+        <tr><td>description</td><td>String</td><td>True</td><td>Service description</td></tr>
+        <tr><td>tagline</td><td>String</td><td>True</td><td>A short service tagline</td></tr>
+        <tr><td>type</td><td>Number</td><td>False</td><td>* Check the services types description bellow</td></tr>      
+        <tr><td>status</td><td>Number</td><td>False</td><td>* Check the services statuses description bellow</td></tr>
+        <tr><td>options</td><td>Number</td><td>False</td><td>* Check the services options description bellow</td></tr>
+        <tr><td>closing_message</td><td>String</td><td>True</td><td>A message to notify member why service is closed</td></tr>
+        <tr><td>closed_from</td><td>Timestamp without Timezone</td><td>True</td><td>A programmed closed date</td></tr>
+        <tr><td>closed_to</td><td>Timestamp without Timezone</td><td>True</td><td>A programmed reopen date</td></tr>      
+    </tbody>
+</table>     
+
+**Service types (not combinable):**  
+
+<table>  
+    <thead><th>Name</th><th>Binary value</th><th>Description</th></thead>
+    <tbody>
+        <tr><td>TICKETING</td><td>2</td><td>Service is a ticketing service</td></tr>      
+        <tr><td>CONCIERGERIE</td><td>4</td><td>Service is a conciergerie service</td></tr>      
+    </tbody>
+</table>
+
+**Service statuses (not combinable):**  
+
+<table>  
+    <thead><th>Name</th><th>Binary value</th><th>Description</th></thead>
+    <tbody>
+        <tr><td>NONE</td><td>0</td><td>None</td></tr>      
+        <tr><td>SUSPENDED</td><td>1</td><td>Service has been suspended and will not be displayed (!= CLOSED)</td></tr>      
+        <tr><td>CLOSED</td><td>2</td><td>Service is closed for a period</td></tr>      
+    </tbody>
+</table>
+
+**Service options (combinable):**  
+
+<table>  
+    <thead><th>Name</th><th>Binary value</th><th>Description</th></thead>
+    <tbody>
+        <tr><td>NONE</td><td>0</td><td>None</td></tr>      
+        <tr><td>NEEDS_DELIVERY_DOCKET</td><td>1</td><td>Service needs a delivery docket from the provider</td></tr>      
+    </tbody>
+</table>
+
+### List All Services [GET]
+
++ Request
+
+    + Headers
+    
+            Accept-Language: fr
+
++ Response 200 (application/json)
+
+        {
+            "status": 0,
+            "message": "OK",
+            "data": [
+                {
+                    "id": 52,
+                    "name": "Billetterie",
+                    "slug": "billetterie-sympass",
+                    "description": "Billetterie Sympass",
+                    "tagline": "Billetterie Sympass",
+                    "type": 2,
+                    "status": 0,
+                    "options": 0,
+                    "closing_message": "",
+                    "closed_from": null,
+                    "closed_to": null
+                },
+                {
+                    "id": 36,
+                    "name": "Blanchisserie",
+                    "slug": "blanchisserie-a-tarif-anniversaire",
+                    "description": "",
+                    "tagline": null,
+                    "type": 4,
+                    "status": 0,
+                    "options": 2,
+                    "closing_message": "",
+                    "closed_from": null,
+                    "closed_to": null
+                },
+                {
+                    "id": 26,
+                    "name": "Blanchisserie",
+                    "slug": "blanchisserie-bgl",
+                    "description": "",
+                    "tagline": null,
+                    "type": 4,
+                    "status": 0,
+                    "options": 3,
+                    "closing_message": "",
+                    "closed_from": null,
+                    "closed_to": null
+                },
+                {
+                    "id": 44,
+                    "name": "Blanchisserie",
+                    "slug": "blanchisserie-deloitte",
+                    "description": "",
+                    "tagline": null,
+                    "type": 4,
+                    "status": 0,
+                    "options": 3,
+                    "closing_message": "",
+                    "closed_from": null,
+                    "closed_to": null
+                },
+                {
+                    "id": 40,
+                    "name": "Blanchisserie",
+                    "slug": "blanchisserie-rbc",
+                    "description": "",
+                    "tagline": null,
+                    "type": 4,
+                    "status": 0,
+                    "options": 3,
+                    "closing_message": "<br /><br /><br /><br /><br /><br /><br /><br />Fermeture estivale de votre service de conciergerie.<br><br />La prochaine récupération de linge se fera jeudi 18 août pour un retour lundi 1er septembre. <br />Merci pour votre compréhension,Votre service de conciergerie.<br>",
+                    "closed_from": "2016-08-01 00:00:00",
+                    "closed_to": "2016-08-15 00:00:00"
+                }
+            ]
+        }
+
+
+
+## Service [/api/service/{service_id_or_slug}]
+Get one service
+
+### View one service details [GET]
+
++ Request
+
+    + Headers
+    
+            Accept-Language: fr
+
++ Parameters
+
+    + service_id_or_slug (number|string) - ID or slug of the researched service
+    
++ Response 200 (application/json)
+
+        {
+            "status": 0,
+            "message": "OK",
+            "data": {
+                "id": 52,
+                "name": "Billetterie",
+                "slug": "billetterie-sympass",
+                "description": "La Billetterie Sympass, c'est plus qu'une billetterie, c'est aussi ...",
+                "tagline": "La billetterie Sympass, c'est sympass !",
+                "type": 2,
+                "status": 0,
+                "options": 0,
+                "closing_message": "",
+                "closed_from": null,
+                "closed_to": null
+            }
+        }
+       
+
+
+## Products Categories Collection [/api/products-categories/{service_id_or_slug}]
+Categories for a given service
+
+**Category attributes:**
+
+<table>  
+    <thead><th>Name</th><th>Type</th><th>Nullable</th><th>Description</th></thead>
+    <tbody>
+        <tr><td>id</td><td>Number</td><td>False</td><td>Unique identifier</td></tr>      
+        <tr><td>name</td><td>String</td><td>False</td><td>Category name</td></tr>      
+        <tr><td>icon</td><td>String</td><td>True</td><td>A css class name related to a specific icon</td></tr>
+        <tr><td>description</td><td>String</td><td>True</td><td>Category description (not used for now)</td></tr>
+        <tr><td>status</td><td>Number</td><td>False</td><td>* Check the categories statuses description bellow</td></tr>
+        <tr><td>service_id</td><td>String</td><td>True</td><td>Service unique id</td></tr>
+        <tr><td>service_name</td><td>String</td><td>True</td><td>Name of the related service</td></tr>
+        <tr><td>service_slug</td><td>String</td><td>True</td><td>Service unique slug</td></tr>
+    </tbody>
+</table>     
+
+**Category statuses (not combinable):**  
+
+<table>  
+    <thead><th>Name</th><th>Binary value</th><th>Description</th></thead>
+    <tbody>
+        <tr><td>NONE</td><td>0</td><td>None</td></tr>      
+        <tr><td>SUSPENDED</td><td>1</td><td>Category has been suspended and will not be displayed</td></tr>      
+    </tbody>
+</table>
+
+### List All Products Categories [GET]
+
++ Request
+
+    + Headers
+    
+            Accept-Language: fr
+
++ Parameters
+
+    + service_id_or_slug (number|string) - ID or slug of the researched service
+    
++ Response 200 (application/json)
+
+        {
+            "status": 0,
+            "message": "OK",
+            "data": [
+                {
+                    "id": 232,
+                    "name": "Bien être",
+                    "icon": "icon-bien-etre",
+                    "description": "Bien être",
+                    "status": 0,
+                    "service_id": 52,
+                    "service_slug": "billetterie-sympass",
+                    "service_name": "Billetterie"
+                },
+                {
+                    "id": 231,
+                    "name": "Bons d'achats",
+                    "icon": "icon-bons",
+                    "description": "Bons d'achats",
+                    "status": 0,
+                    "service_id": 52,
+                    "service_slug": "billetterie-sympass",
+                    "service_name": "Billetterie"
+                },
+                {
+                    "id": 235,
+                    "name": "Cinéma, Culture",
+                    "icon": "icon-cinema",
+                    "description": "Cinéma, Culture",
+                    "status": 0,
+                    "service_id": 52,
+                    "service_slug": "billetterie-sympass",
+                    "service_name": "Billetterie"
+                },
+                {
+                    "id": 234,
+                    "name": "Parcs d'attractions",
+                    "icon": "icon-parcs",
+                    "description": "Parcs d'attractions",
+                    "status": 0,
+                    "service_id": 52,
+                    "service_slug": "billetterie-sympass",
+                    "service_name": "Billetterie"
+                },
+                {
+                    "id": 236,
+                    "name": "Sports",
+                    "icon": "icon-sport",
+                    "description": "Sports",
+                    "status": 0,
+                    "service_id": 52,
+                    "service_slug": "billetterie-sympass",
+                    "service_name": "Billetterie"
+                },
+                {
+                    "id": 233,
+                    "name": "Zoos",
+                    "icon": "icon-zoos",
+                    "description": "Zoos",
+                    "status": 0,
+                    "service_id": 52,
+                    "service_slug": "billetterie-sympass",
+                    "service_name": "Billetterie"
+                }
+            ]
+        }
+
+
+        
+## Product Category [/api/products-categories/{category_id}]
+Get one category
+
+### View one category details [GET]
+
++ Request
+
+    + Headers
+    
+            Accept-Language: fr
+
++ Parameters
+
+    + category_id (number) - ID of the researched category
+    
++ Response 200 (application/json)
+
+        {
+            "status": 0,
+            "message": "OK",
+            "data": {
+                "id": 232,
+                "name": "Wellness",
+                "icon": "icon-bien-etre",
+                "description": "Wellness",
+                "status": 0,
+                "service_id": 52,
+                "service_slug": "billetterie-sympass",
+                "service_name": "Ticketing"
+            }
+        }
+       
+
+
+## Products Collection [/api/products/{service_id_or_slug}/{category_id}]
+Products are linked to services throw categories.
+Api will only send ACTIVE and AVAILABLE and VISIBLE products (status = 7)
+
+**Product attributes:**
+
+<table>  
+    <thead><th>Name</th><th>Type</th><th>Nullable</th><th>Description</th></thead>
+    <tbody>
+        <tr><td>id</td><td>Number</td><td>False</td><td>Unique identifier</td></tr>      
+        <tr><td>partner_name</td><td>String</td><td>True</td><td>Partner name</td></tr>      
+        <tr><td>name</td><td>Boolean</td><td>True</td><td>Product name</td></tr>
+        <tr><td>description</td><td>String</td><td>True</td><td>What's this product</td></tr>
+        <tr><td>tagline</td><td>String</td><td>True</td><td>A short product tagline</td></tr>
+        <tr><td>public_price</td><td>Float</td><td>True</td><td>Partner sell this product at this price (include tax)</td></tr>      
+        <tr><td>price</td><td>Float</td><td>False</td><td>Is the price for a given category > subcategory with tax and client contribution computed</td></tr>      
+        <tr><td>status</td><td>Float</td><td>False</td><td>* Check the product statuses description bellow. A sellable product must to be active AND available</td></tr>
+        <tr><td>service (for one product)</td><td>String</td><td>False</td><td>Product is in this service</td></tr>      
+        <tr><td>category</td><td>String</td><td>False</td><td>Product is in this category</td></tr>      
+        <tr><td>logo</td><td>String</td><td>False</td><td>A link to the partner logo</td></tr>      
+        <tr><td>banner</td><td>String</td><td>False</td><td>A link to the partner banner</td></tr> 
+    </tbody>
+</table>     
+
+**Product statuses (combinable):**  
+
+<table>  
+    <thead><th>Name</th><th>Binary value</th><th>Description</th></thead>
+    <tbody>
+        <tr><td>ACTIVE</td><td>1</td><td>Product has been activated on the platform</td></tr>      
+        <tr><td>AVAILABLE</td><td>2</td><td>Product is available</td></tr>      
+        <tr><td>VISIBLE</td><td>2</td><td>Product is visible on the Sympass platform</td></tr>      
+    </tbody>
+</table>
+
+### List All Service Category Products [GET]
+
++ Request
+
+    + Headers
+    
+            Accept-Language: fr
+
++ Parameters
+
+    + service_id_or_slug (number|string) - ID or slug of the researched service
+    + category_id (number) - ID of the researched category
+   
++ Response 200 (application/json)
+
+        {
+            "status": 0,
+            "message": "OK",
+            "data": [
+                {
+                    "id": 77266,
+                    "name": "Aral Superwash",
+                    "description": "Valables jusqu'au 31.12.2016",
+                    "tagline": null,
+                    "status": 7,
+                    "price": 3.92,
+                    "public_price": 9.36,
+                    "service": "Billetterie",
+                    "category": "Bons d'achats",
+                    "partner_id": 693,
+                    "partner_name": "Aral Superwash",
+                    "partner_slug": "-aral-superwash",
+                    "partnership_id": 224,
+                    "logo": "http://local.sympass-v3.lu:10088/img/partners/logos/224.png",
+                    "banner": "http://local.sympass-v3.lu:10088/img/partners/banners/224.jpg"
+                },
+                {
+                    "id": 77275,
+                    "name": "Auchan Kirchberg: bon d'achat de 10 EUR",
+                    "description": "valable jusqu'au 25.08.2017<br />Valable également dans le drink shop.",
+                    "tagline": null,
+                    "status": 7,
+                    "price": 9.21,
+                    "public_price": 10,
+                    "service": "Billetterie",
+                    "category": "Bons d'achats",
+                    "partner_id": 628,
+                    "partner_name": "Auchan Kirchberg",
+                    "partner_slug": "-auchan-kirchberg",
+                    "partnership_id": 120,
+                    "logo": "http://local.sympass-v3.lu:10088/img/partners/logos/120.png",
+                    "banner": "http://local.sympass-v3.lu:10088/img/partners/banners/120.jpg"
+                },
+                {
+                    "id": 77281,
+                    "name": "Auchan Kirchberg: bon d'achat de 50 EUR",
+                    "description": "valable jusqu'au 25.08.2017<br />Valable également dans le drink shop.",
+                    "tagline": null,
+                    "status": 7,
+                    "price": 46.06,
+                    "public_price": 50,
+                    "service": "Billetterie",
+                    "category": "Bons d'achats",
+                    "partner_id": 628,
+                    "partner_name": "Auchan Kirchberg",
+                    "partner_slug": "-auchan-kirchberg",
+                    "partnership_id": 120,
+                    "logo": "http://local.sympass-v3.lu:10088/img/partners/logos/120.png",
+                    "banner": "http://local.sympass-v3.lu:10088/img/partners/banners/120.jpg"
+                }
+            ]
+        }
+
+
+
+## Product [/api/products/{category_id}/{product_id}]
+Get one Category Product
+
+### View one Service Category Product details [GET]
+
++ Request
+
+    + Headers
+    
+            Accept-Language: fr
+            Authorization: bearer sEZa33OmR1TxcJYETRuJE4XhPFYlest9SVeIUq2K
+
++ Parameters
+
+    + category_id (number) - ID of the researched category
+    + product_id (number) - ID of the researched product
+   
++ Response 200 (application/json)
+
+        {
+            "status": 0,
+            "message": "",
+            "data":
+                {
+                    "id": 77238,
+                    "partner_name": "Zoo amnéville",
+                    "name": "Zoo amnéville adulte",
+                    "description": "<p>12 ans et plus. validit&eacute;: non limit&eacute;e Ouvert toute l'ann&eacute;e.<\/p>",
+                    "tagline": "",
+                    "public_price": 35,
+                    "price": 25.4,
+                    "status": 7,
+                    "service": "Billetterie",
+                    "category": "Zoos",
+                    "logo": "http://local.sympass-v3.lu:10088/img/partners/logos/120.png",
+                    "banner": "http://local.sympass-v3.lu:10088/img/partners/banners/120.jpg"
+                }
+        }
+
++ Response 401 (application/json)  
+
+        {  
+            "error": "Unauthorized",
+            "error_description": "Access token has expired or has been deleted"
+        }
+
+
+
+## Orders Collection [/api/orders]
+List all orders for a given token
+Orders are based on 3 levels : 
+- Order > Is the 1st level, contains a collection of ordered services
+    - Ordered Services > Is the 2nd level, contains a collection of order lines
+        - Order Lines > Is the 3rd level, contains products, price, description
+
+**Order attributes:**  
+
+<table>  
+    <thead><th>Name</th><th>Type</th><th>Nullable</th><th>Description</th></thead>
+    <tbody>
+        <tr><td>id</td><td>Number</td><td>False</td><td>Order unique identifier</td></tr>      
+        <tr><td>reference</td><td>String</td><td>False</td><td>Unique order reference "S-0000[increment]"</td></tr>
+        <tr><td>status</td><td>Number</td><td>False</td><td>* Check the orders statuses description bellow</td></tr>      
+        <tr><td>created_on</td><td>Timestamp without Timezone</td><td>False</td><td>Creation date</td></tr>      
+        <tr><td>modified_on</td><td>Timestamp without Timezone</td><td>False</td><td>Update date</td></tr>      
+        <tr><td>placed_on</td><td>Timestamp without Timezone</td><td>True</td><td>Placed date</td></tr>      
+        <tr><td>completed_on</td><td>Timestamp without Timezone</td><td>True</td><td>Completion date</td></tr>      
+        <tr><td>total_excl_tax</td><td>Float</td><td>False</td><td>Total without tax</td></tr>
+        <tr><td>total_vat</td><td>Float</td><td>False</td><td>Total tax</td></tr>      
+        <tr><td>total_incl_tax</td><td>Float</td><td>False</td><td>Total with tax</td></tr>      
+        <tr><td>ordered_services</td><td>Json</td><td>False</td><td>Collection of customer ordered services</td></tr>      
+    </tbody>
+</table>     
+
+**Order statuses (combinable):**  
+
+<table>  
+    <thead><th>Name</th><th>Binary value</th><th>Description</th></thead>
+    <tbody>
+        <tr><td>CART</td><td>1</td><td>In customer cart, customer continue their purchases (not combinable with INJECTED)</td></tr>      
+        <tr><td>INJECTED</td><td>2</td><td>Back-office user has injected the order (not combinable with CART)</td></tr>      
+        <tr><td>PLACED</td><td>4</td><td>The order has been placed (== validated by customer)</td></tr>      
+        <tr><td>REJECTED</td><td>8</td><td>The member decided to give up the ordering process (automatically set with the order rejection script)</td></tr>      
+        <tr><td>CANCELLED</td><td>16</td><td>Manual order cancellation by Emresa representative</td></tr>      
+        <tr><td>INVOICED</td><td>32</td><td>An invoice has been generated for this order</td></tr>      
+        <tr><td>COMPLETE</td><td>64</td><td>The order process has been completed (this means that related invoice is POSTED)</td></tr>      
+        <tr><td>LOCKED</td><td>128</td><td>The order cannot be modified, all lines have been handled</td></tr>      
+    </tbody>
+</table>
+
+**Ordered Services attributes:**  
+
+<table>  
+    <thead><th>Name</th><th>Type</th><th>Nullable</th><th>Description</th></thead>
+    <tbody>
+        <tr><td>id</td><td>Number</td><td>False</td><td>Ordered Service unique identifier</td></tr>      
+        <tr><td>service_name</td><td>Number</td><td>False</td><td>Related service name</td></tr>
+        <tr><td>service_type</td><td>Number</td><td>False</td><td>* Check the services types description bellow</td></tr>      
+        <tr><td>total_excl_tax</td><td>Float</td><td>False</td><td>Total without tax</td></tr>
+        <tr><td>total_vat</td><td>Float</td><td>False</td><td>Total tax</td></tr>      
+        <tr><td>total_incl_tax</td><td>Float</td><td>False</td><td>Total with tax</td></tr>      
+        <tr><td>will_be_handled_on</td><td>Timestamp without Timezone</td><td>True</td><td>Estimated date of ordered service handling. e.g. next wednesday for ticketing service</td></tr>  
+        <tr><td>order_lines</td><td>Json</td><td>False</td><td>Collection of customer ordered products lines related to this ordered service</td></tr>      
+    </tbody>
+</table>   
+
+**Order Service types:** 
+
+<table>  
+    <thead><th>Name</th><th>Binary value</th><th>Description</th></thead>
+    <tbody>
+        <tr><td>TICKETING</td><td>2</td><td>Ticketing service</td></tr>      
+        <tr><td>CONCIERGERIE</td><td>4</td><td>Conciergerie service</td></tr>      
+    </tbody>
+</table>
+
+**Order Lines attributes:**  
+
+<table>  
+    <thead><th>Name</th><th>Type</th><th>Nullable</th><th>Description</th></thead>
+    <tbody>
+        <tr><td>id</td><td>Number</td><td>False</td><td>Order Line unique identifier</td></tr>      
+        <tr><td>product_name</td><td>Number</td><td>False</td><td>Related product unique identifier</td></tr>
+        <tr><td>status</td><td>Number</td><td>False</td><td>* Check the order lines statuses description bellow</td></tr>      
+        <tr><td>description</td><td>String</td><td>False</td><td>Description of the ordered product, usually, the product name</td></tr>
+        <tr><td>quantity</td><td>Number</td><td>False</td><td>Quantity of product for one line</td></tr>
+        <tr><td>price</td><td>Float</td><td>False</td><td>Price excluding tax per unit</td></tr>
+        <tr><td>public_price_including_tax</td><td>Float</td><td>False</td><td>Public Price including tax per unit</td></tr>
+        <tr><td>vat_code</td><td>String</td><td>False</td><td>Accounting service formatted vat code</td></tr>
+        <tr><td>total_excl_tax</td><td>Float</td><td>False</td><td>Total without tax</td></tr>
+        <tr><td>total_vat</td><td>Float</td><td>False</td><td>Total tax</td></tr>      
+        <tr><td>total_incl_tax</td><td>Float</td><td>False</td><td>Total with tax</td></tr>      
+    </tbody>
+</table>     
+
+**Order lines statuses (combinable):**  
+
+<table>  
+    <thead><th>Name</th><th>Binary value</th><th>Description</th></thead>
+    <tbody>
+        <tr><td>PENDING</td><td>1</td><td>Line is waiting for a handling [Ticketing services & Concierge services]</td></tr>      
+        <tr><td>PREPARED</td><td>2</td><td>Order line is ready to be delivered. Only shippable products can be prepared [Ticketing services]</td></tr>      
+        <tr><td>SHIPPED</td><td>4</td><td>Order line has been shipped. Only prepared lines can be shipped [Ticketing services]</td></tr>      
+        <tr><td>PUTTED_DOWN</td><td>8</td><td>Member has put his articles down to be treated in a conciergerie service (laundry, ...) [Concierge services]</td></tr>      
+        <tr><td>CHECKED_OUT</td><td>16</td><td>Conciergerie partner has checked out the deposited member's articles [Concierge services]</td></tr>      
+        <tr><td>BROUGHT_BACK</td><td>32</td><td>Conciergerie partner has brought back the deposited and checked out member's articles [Concierge services]</td></tr>      
+        <tr><td>PICKED_UP</td><td>64</td><td>Order line has been picked up at place. e.g. A member comes to the sympass head quarter and pick up his ready for delivery tickets. e.g.2. A member comes to a conciergerie and pick up his articles. [Ticketing services & Concierge services]</td></tr>      
+    </tbody>
+</table>
+
+### List All Member Orders [GET]
+
++ Request
+
+    + Headers
+    
+            Accept-Language: fr
+
++ Response 200 (application/json)
+
+        {
+            "status": 0,
+            "message": "OK",
+            "data": [
+                {
+                    "id": 22115,
+                    "reference": "S-000022115",
+                    "status": 229,
+                    "created_at": "2016-06-06 17:39:02",
+                    "updated_at": "2016-06-08 11:26:09",
+                    "placed_on": "2016-06-06 17:39:24",
+                    "completed_on": "2016-06-06 17:39:24",
+                    "total_excl_tax": 16.1,
+                    "total_vat": 0,
+                    "total_incl_tax": 16.1,
+                    "ordered_services": [
+                        {
+                            "id": 23478,
+                            "total_excl_tax": 16.1,
+                            "total_vat": 0,
+                            "total_incl_tax": 16.1,
+                            "will_be_handled_on": "2016-06-08 11:05:00",
+                            "order_lines": [
+                                {
+                                    "id": 32736,
+                                    "status": 4,
+                                    "description": "Amneville Aventure:billet Adulte",
+                                    "quantity": 1,
+                                    "price": 16.1,
+                                    "total_excl_tax": 16.1,
+                                    "total_vat": 0,
+                                    "total_incl_tax": 16.1,
+                                    "product_name": "Amneville Aventure:billet Adulte",
+                                    "public_price_including_tax": 23
+                                }
+                            ],
+                            "service_name": "Billetterie",
+                            "service_type": 2
+                        }
+                    ]
+                },
+                {
+                    "id": 20267,
+                    "reference": "S-000020267",
+                    "status": 229,
+                    "created_at": "2016-05-25 20:59:32",
+                    "updated_at": "2016-06-01 11:23:06",
+                    "placed_on": "2016-05-25 21:29:34",
+                    "completed_on": "2016-05-25 21:29:34",
+                    "total_excl_tax": 16.1,
+                    "total_vat": 0,
+                    "total_incl_tax": 16.1,
+                    "ordered_services": [
+                        {
+                            "id": 21496,
+                            "total_excl_tax": 16.1,
+                            "total_vat": 0,
+                            "total_incl_tax": 16.1,
+                            "will_be_handled_on": "2016-06-01 11:05:00",
+                            "order_lines": [
+                                {
+                                    "id": 30045,
+                                    "status": 4,
+                                    "description": "Amneville Aventure:billet Adulte",
+                                    "quantity": 1,
+                                    "price": 16.1,
+                                    "total_excl_tax": 16.1,
+                                    "total_vat": 0,
+                                    "total_incl_tax": 16.1,
+                                    "product_name": "Amneville Aventure:billet Adulte",
+                                    "public_price_including_tax": 23
+                                }
+                            ],
+                            "service_name": "Billetterie",
+                            "service_type": 2
+                        }
+                    ]
+                },
+                {
+                    "id": 12117,
+                    "reference": "S-000012117",
+                    "status": 229,
+                    "created_at": "2016-04-05 16:28:03",
+                    "updated_at": "2016-04-05 16:30:49",
+                    "placed_on": "2016-04-05 16:28:21",
+                    "completed_on": "2016-04-05 16:28:21",
+                    "total_excl_tax": 16.667,
+                    "total_vat": 2.833,
+                    "total_incl_tax": 19.5,
+                    "ordered_services": [
+                        {
+                            "id": 12833,
+                            "total_excl_tax": 16.667,
+                            "total_vat": 2.833,
+                            "total_incl_tax": 19.5,
+                            "will_be_handled_on": "2016-09-21 15:32:23",
+                            "order_lines": [
+                                {
+                                    "id": 17630,
+                                    "status": 64,
+                                    "description": "Chemise sur cintre (délai de traitement 5 jours ouvrables)",
+                                    "quantity": 10,
+                                    "price": 1.6667,
+                                    "total_excl_tax": 16.667,
+                                    "total_vat": 2.833,
+                                    "total_incl_tax": 19.5,
+                                    "product_name": "Chemise sur cintre (délai de traitement 5 jours ouvrables)",
+                                    "public_price_including_tax": 0
+                                }
+                            ],
+                            "service_name": "Chemises pressing",
+                            "service_type": 4
+                        }
+                    ]
+                }
+            ]   
+        }
+
+
+## Order [/api/orders/{order_id}]
+Get one order
+
+### View an Order details [GET]
+
++ Request
+
+    + Headers
+    
+            Accept-Language: fr
+
++ Parameters
+
+    + order_id (number) - ID of the researched order
+    
++ Response 200 (application/json)
+
+        {
+            "status": 0,
+            "message": "OK",
+            "data": {
+                "id": 39405,
+                "reference": "S-000039405",
+                "status": 101,
+                "created_at": "2016-09-19 13:43:44",
+                "updated_at": "2016-09-19 13:46:54",
+                "placed_on": "2016-09-19 13:46:54",
+                "completed_on": "2016-09-19 13:46:54",
+                "total_excl_tax": 53,
+                "total_vat": 0,
+                "total_incl_tax": 53,
+                "ordered_services": [
+                    {
+                        "id": 41811,
+                        "total_excl_tax": 53,
+                        "total_vat": 0,
+                        "total_incl_tax": 53,
+                        "will_be_handled_on": "2016-09-21 11:05:00",
+                        "order_lines": [
+                            {
+                                "id": 58162,
+                                "status": 1,
+                                "description": "Amneville Aventure: 11-17 ans",
+                                "quantity": 2,
+                                "price": 14,
+                                "total_excl_tax": 28,
+                                "total_vat": 0,
+                                "total_incl_tax": 28,
+                                "product_name": "Amneville Aventure: 11-17 ans",
+                                "public_price_including_tax": 20
+                            },
+                            {
+                                "id": 58159,
+                                "status": 1,
+                                "description": "Thermapolis 2 heures",
+                                "quantity": 2,
+                                "price": 12.5,
+                                "total_excl_tax": 25,
+                                "total_vat": 0,
+                                "total_incl_tax": 25,
+                                "product_name": "Thermapolis 2 heures",
+                                "public_price_including_tax": 14.9
+                            }
+                        ],
+                        "service_name": "Billetterie",
+                        "service_type": 2
+                    }
+                ]
+            }
+        }
+        }

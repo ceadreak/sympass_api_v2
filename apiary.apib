@@ -1972,6 +1972,7 @@ Orders are based on 3 levels :
         <tr><td>id</td><td>Number</td><td>False</td><td>Order Line unique identifier</td></tr>      
         <tr><td>product_name</td><td>Number</td><td>False</td><td>Related product unique identifier</td></tr>
         <tr><td>status</td><td>Number</td><td>False</td><td>* Check the order lines statuses description bellow</td></tr>      
+        <tr><td>next_status</td><td>Number</td><td>True</td><td>* Check the order lines statuses description bellow</td></tr>
         <tr><td>description</td><td>String</td><td>False</td><td>Description of the ordered product, usually, the product name</td></tr>
         <tr><td>quantity</td><td>Number</td><td>False</td><td>Quantity of product for one line</td></tr>
         <tr><td>price</td><td>Float</td><td>False</td><td>Price excluding tax per unit</td></tr>
@@ -2169,6 +2170,7 @@ Get one order
                             {
                                 "id": 58162,
                                 "status": 1,
+                                "next_status": 2,
                                 "description": "Amneville Aventure: 11-17 ans",
                                 "quantity": 2,
                                 "price": 14,
@@ -2181,6 +2183,7 @@ Get one order
                             {
                                 "id": 58159,
                                 "status": 1,
+                                "next_status": 2,
                                 "description": "Thermapolis 2 heures",
                                 "quantity": 2,
                                 "price": 12.5,
@@ -2197,4 +2200,29 @@ Get one order
                 ]
             }
         }
+        }
+        
+## Scanner [/api/scan]
+Handle operations on order line status that are requested by barcode or qr-code scanners.
+It is possible to do the actions based on an order, ordered service or order line. This is defined by the type parameter.
+
+**Possible types: **
+- order
+- ordered-service
+- order-line
+
+### Modify order line status [POST]
+
++ Request (application/json)
+
+        {
+            "id": 12345,
+            "type": "order-line"
+        }
+        
++ Response 200 (application/json)
+
+        {
+            "status": 0,
+            "message": "Valid login"
         }

@@ -1918,6 +1918,7 @@ Orders are based on 3 levels :
         <tr><td>total_excl_tax</td><td>Float</td><td>False</td><td>Total without tax</td></tr>
         <tr><td>total_vat</td><td>Float</td><td>False</td><td>Total tax</td></tr>      
         <tr><td>total_incl_tax</td><td>Float</td><td>False</td><td>Total with tax</td></tr>      
+        <tr><td>holder_name</td><td>String</td><td>False</td><td>Name of the holder. For members the first name and last name will be displayed. For clients only the name will be displayed.</td></tr>      
         <tr><td>ordered_services</td><td>Json</td><td>False</td><td>Collection of customer ordered services</td></tr>      
     </tbody>
 </table>     
@@ -2024,6 +2025,7 @@ Orders are based on 3 levels :
                     "total_excl_tax": 16.1,
                     "total_vat": 0,
                     "total_incl_tax": 16.1,
+                    "holder_name": "DOE John",
                     "ordered_services": [
                         {
                             "id": 23478,
@@ -2061,6 +2063,7 @@ Orders are based on 3 levels :
                     "total_excl_tax": 16.1,
                     "total_vat": 0,
                     "total_incl_tax": 16.1,
+                    "holder_name": "DOE John",
                     "ordered_services": [
                         {
                             "id": 21496,
@@ -2098,6 +2101,7 @@ Orders are based on 3 levels :
                     "total_excl_tax": 16.667,
                     "total_vat": 2.833,
                     "total_incl_tax": 19.5,
+                    "holder_name": "DOE John",
                     "ordered_services": [
                         {
                             "id": 12833,
@@ -2159,6 +2163,7 @@ Get one order
                 "total_excl_tax": 53,
                 "total_vat": 0,
                 "total_incl_tax": 53,
+                "holder_name": "DOE John",
                 "ordered_services": [
                     {
                         "id": 41811,
